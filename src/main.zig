@@ -12,7 +12,7 @@ const Layout = struct {
     const screen_height: u16 = 900;
 
     const grid_size: i32 = 3;
-    const cell_size: i32 = @divExact(screen_width, grid_size);
+    const cell_size_px: i32 = @divExact(screen_width, grid_size);
 };
 
 comptime {
@@ -73,12 +73,12 @@ fn find_line_winner(first: ?Turn, second: ?Turn, third: ?Turn) ?Turn {
 }
 
 fn cell_center(x: usize, y: usize) rl.Vector2 {
-    const half_cell_size = Layout.cell_size / 2;
+    const half_cell_size = Layout.cell_size_px / 2;
 
     // Swapped values
     return rl.Vector2{
-        .x = @floatFromInt((y * Layout.cell_size) + half_cell_size),
-        .y = @floatFromInt((x * Layout.cell_size) + half_cell_size),
+        .x = @floatFromInt((y * Layout.cell_size_px) + half_cell_size),
+        .y = @floatFromInt((x * Layout.cell_size_px) + half_cell_size),
     };
 }
 
@@ -226,10 +226,35 @@ fn draw_centered_text(text: [:0]const u8) void {
     );
 }
 
-fn draw_board() void {
-    const cell_width_px: f32 = @floatFromInt(Layout.screen_width / Layout.grid_size);
-    const cell_height_px: f32 = @floatFromInt(Layout.screen_height / Layout.grid_size);
+fn draw_board_turn(text: [:0]const u8, row_index: f32, column_index: f32) void {
+    const text_font_size = Layout.cell_size_px / 2;
 
+    const text_size = rl.measureTextEx(
+        font,
+        text,
+        text_font_size,
+        0,
+    );
+
+    assert(text_size.x <= Layout.cell_size_px);
+    assert(text_size.y <= Layout.cell_size_px);
+
+    const text_position = rl.Vector2{
+        .x = Layout.cell_size_px * column_index + (Layout.cell_size_px - text_size.x) / 2,
+        .y = Layout.cell_size_px * row_index + (Layout.cell_size_px - text_size.y) / 2,
+    };
+
+    rl.drawTextEx(
+        font,
+        text,
+        text_position,
+        Layout.cell_size_px / 2,
+        Theme.font_spacing_px,
+        Theme.color,
+    );
+}
+
+fn draw_board() void {
     for (game.board, 0..) |row, row_index| {
         for (row, 0..) |cell, column_index| {
             // If cell is not taken, nothing to set
@@ -238,44 +263,19 @@ fn draw_board() void {
 
             const row_index_f32: f32 = @floatFromInt(row_index);
             const column_index_f32: f32 = @floatFromInt(column_index);
-            const text_font_size = cell_width_px / 2;
 
-            const text_size = rl.measureTextEx(
-                font,
-                text,
-                text_font_size,
-                0,
-            );
-
-            assert(text_size.x <= cell_width_px);
-            assert(text_size.y <= cell_height_px);
-
-            const text_position = rl.Vector2{
-                .x = cell_width_px * column_index_f32 + (cell_width_px - text_size.x) / 2,
-                .y = cell_height_px * row_index_f32 + (cell_height_px - text_size.y) / 2,
-            };
-
-            rl.drawTextEx(
-                font,
-                text,
-                text_position,
-                cell_width_px / 2,
-                Theme.font_spacing_px,
-                Theme.color,
-            );
+            draw_board_turn(text, row_index_f32, column_index_f32);
         }
     }
 }
 
 fn draw_grid() void {
     const border_offset_px = Theme.thickness_px / 2;
-    const cell_width_px: i32 = @intCast(Layout.screen_width / Layout.grid_size);
-    const cell_height_px: i32 = @intCast(Layout.screen_height / Layout.grid_size);
 
     for (1..Layout.grid_size) |line_index| {
         const line_index_i32: i32 = @intCast(line_index);
 
-        const vertical_border_x = cell_width_px * line_index_i32 - border_offset_px;
+        const vertical_border_x = Layout.cell_size_px * line_index_i32 - border_offset_px;
         rl.drawRectangle(
             vertical_border_x,
             0,
@@ -284,7 +284,7 @@ fn draw_grid() void {
             Theme.color,
         );
 
-        const horizontal_border_y = cell_height_px * line_index_i32 - border_offset_px;
+        const horizontal_border_y = Layout.cell_size_px * line_index_i32 - border_offset_px;
         rl.drawRectangle(
             0,
             horizontal_border_y,
@@ -292,6 +292,18 @@ fn draw_grid() void {
             Theme.thickness_px,
             Theme.color,
         );
+    }
+}
+
+fn draw_placement() void {
+    const text = text_from_mark(game.turn);
+    const mouse_position = rl.getMousePosition();
+
+    const row_index = @divExact(mouse_position.y, Layout.cell_size_px);
+    const column_index = @divExact(mouse_position.x, Layout.cell_size_px);
+
+    if (game.board[@intFromFloat(row_index)][@intFromFloat(column_index)] == null) {
+        draw_board_turn(text, row_index, column_index);
     }
 }
 
@@ -306,8 +318,8 @@ fn update_game() void {
             if (game.status == .started and rl.isMouseButtonPressed(.left)) {
                 const mouse_position = rl.getMousePosition();
 
-                const x: u8 = @intFromFloat(@divExact(mouse_position.y, Layout.cell_size));
-                const y: u8 = @intFromFloat(@divExact(mouse_position.x, Layout.cell_size));
+                const x: u8 = @intFromFloat(@divExact(mouse_position.y, Layout.cell_size_px));
+                const y: u8 = @intFromFloat(@divExact(mouse_position.x, Layout.cell_size_px));
 
                 take_position(x, y) catch |err| switch (err) {
                     error.PositionOccupied => {},
@@ -337,6 +349,7 @@ fn draw_game() void {
             draw_grid();
             draw_board();
             draw_winner_line();
+            draw_placement();
         },
         .ending => {
             switch (game.status) {
