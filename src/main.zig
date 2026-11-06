@@ -5,40 +5,38 @@ const Io = std.Io;
 const zig_zag_zoe = @import("zig_zag_zoe");
 
 const assert = std.debug.assert;
-
-const screen_width: u16 = 900;
-const screen_height: u16 = 900;
-
-const grid_size: i32 = 3;
-const cell_size: i32 = @divExact(screen_width, grid_size);
-const grid_border_thickness_px = 10;
-
-pub const board_size: u8 = 3;
-
-pub const Turn = enum { x, o };
-pub const Board = [board_size][board_size]?Turn;
-
 const log = std.log;
+
+const Layout = struct {
+    const screen_width: u16 = 900;
+    const screen_height: u16 = 900;
+
+    const grid_size: i32 = 3;
+    const cell_size: i32 = @divExact(screen_width, grid_size);
+};
+
+comptime {
+    assert(Layout.screen_width % 3 == 0);
+    assert(Layout.screen_height % 3 == 0);
+}
 
 const Status = enum { started, x_won, o_won, tie };
 const Screen = enum { welcome, game, ending };
 const Theme = struct {
+    const color = rl.Color.light_gray;
     const thickness_px: i32 = 10;
+    const font_size_px: i32 = 50;
+    const font_spacing_px: i32 = 0;
 };
 
-var active_screen: Screen = .welcome;
+comptime {
+    assert(Theme.thickness_px % 2 == 0);
+}
 
 var font: rl.Font = undefined;
-const font_size_px = 50;
-const font_spacing_px = 0;
 
-const color = rl.Color.light_gray;
-
-comptime {
-    assert(grid_border_thickness_px % 2 == 0);
-    assert(screen_width % 3 == 0);
-    assert(screen_height % 3 == 0);
-}
+pub const Turn = enum { x, o };
+pub const Board = [Layout.grid_size][Layout.grid_size]?Turn;
 
 const WinnerLine = struct {
     start: rl.Vector2,
@@ -51,6 +49,7 @@ const Game = struct {
     turn: Turn,
     status: Status,
     winner_line: ?WinnerLine = null,
+    active_screen: Screen = .welcome,
 };
 
 var game: Game = undefined;
@@ -74,12 +73,12 @@ fn find_line_winner(first: ?Turn, second: ?Turn, third: ?Turn) ?Turn {
 }
 
 fn cell_center(x: usize, y: usize) rl.Vector2 {
-    const half_cell_size = cell_size / 2;
+    const half_cell_size = Layout.cell_size / 2;
 
     // Swapped values
     return rl.Vector2{
-        .x = @floatFromInt((y * cell_size) + half_cell_size),
-        .y = @floatFromInt((x * cell_size) + half_cell_size),
+        .x = @floatFromInt((y * Layout.cell_size) + half_cell_size),
+        .y = @floatFromInt((x * Layout.cell_size) + half_cell_size),
     };
 }
 
@@ -97,7 +96,7 @@ fn set_winner_line(
 }
 
 fn find_winner() ?Turn {
-    for (0..board_size) |index| {
+    for (0..Layout.grid_size) |index| {
         if (find_line_winner(game.board[index][0], game.board[index][1], game.board[index][2])) |turn| {
             set_winner_line(index, 0, index, 2);
             return turn;
@@ -138,14 +137,14 @@ fn update_status() void {
 
     if (is_board_full()) {
         game.status = .tie;
-        active_screen = .ending;
+        game.active_screen = .ending;
     }
     log.debug("game status updated: {}", .{game.status});
 }
 
 pub fn take_position(x: u8, y: u8) error{PositionOccupied}!void {
-    assert(x < board_size);
-    assert(y < board_size);
+    assert(x < Layout.grid_size);
+    assert(y < Layout.grid_size);
 
     const cell = &game.board[x][y];
     if (cell.* != null) {
@@ -163,7 +162,11 @@ pub fn take_position(x: u8, y: u8) error{PositionOccupied}!void {
 }
 
 fn init_window() error{LoadFont}!void {
-    rl.initWindow(screen_width, screen_height, "Zig Zag Zoe");
+    rl.initWindow(
+        Layout.screen_width,
+        Layout.screen_height,
+        "Zig Zag Zoe",
+    );
 
     font = try rl.getFontDefault();
 
@@ -192,11 +195,11 @@ fn draw_winner_line() void {
         line.start,
         line.current,
         Theme.thickness_px,
-        color,
+        Theme.color,
     );
 
     if (line.current.x == line.end.x and line.current.y == line.end.y) {
-        active_screen = .ending;
+        game.active_screen = .ending;
     }
 }
 
@@ -204,28 +207,28 @@ fn draw_centered_text(text: [:0]const u8) void {
     const text_size = rl.measureTextEx(
         font,
         text,
-        font_size_px,
-        font_spacing_px,
+        Theme.font_size_px,
+        Theme.font_spacing_px,
     );
 
     const text_position = rl.Vector2{
-        .x = (screen_width - text_size.x) / 2,
-        .y = (screen_height - text_size.y) / 2,
+        .x = (Layout.screen_width - text_size.x) / 2,
+        .y = (Layout.screen_height - text_size.y) / 2,
     };
 
     rl.drawTextEx(
         font,
         text,
         text_position,
-        font_size_px,
-        font_spacing_px,
-        color,
+        Theme.font_size_px,
+        Theme.font_spacing_px,
+        Theme.color,
     );
 }
 
 fn draw_board() void {
-    const cell_width_px: f32 = @floatFromInt(screen_width / board_size);
-    const cell_height_px: f32 = @floatFromInt(screen_height / board_size);
+    const cell_width_px: f32 = @floatFromInt(Layout.screen_width / Layout.grid_size);
+    const cell_height_px: f32 = @floatFromInt(Layout.screen_height / Layout.grid_size);
 
     for (game.board, 0..) |row, row_index| {
         for (row, 0..) |cell, column_index| {
@@ -252,41 +255,59 @@ fn draw_board() void {
                 .y = cell_height_px * row_index_f32 + (cell_height_px - text_size.y) / 2,
             };
 
-            rl.drawTextEx(font, text, text_position, cell_width_px / 2, font_spacing_px, color);
+            rl.drawTextEx(
+                font,
+                text,
+                text_position,
+                cell_width_px / 2,
+                Theme.font_spacing_px,
+                Theme.color,
+            );
         }
     }
 }
 
 fn draw_grid() void {
-    const border_offset_px = grid_border_thickness_px / 2;
-    const cell_width_px: i32 = @intCast(screen_width / board_size);
-    const cell_height_px: i32 = @intCast(screen_height / board_size);
+    const border_offset_px = Theme.thickness_px / 2;
+    const cell_width_px: i32 = @intCast(Layout.screen_width / Layout.grid_size);
+    const cell_height_px: i32 = @intCast(Layout.screen_height / Layout.grid_size);
 
-    for (1..board_size) |line_index| {
+    for (1..Layout.grid_size) |line_index| {
         const line_index_i32: i32 = @intCast(line_index);
 
         const vertical_border_x = cell_width_px * line_index_i32 - border_offset_px;
-        rl.drawRectangle(vertical_border_x, 0, grid_border_thickness_px, @intCast(screen_height), color);
+        rl.drawRectangle(
+            vertical_border_x,
+            0,
+            Theme.thickness_px,
+            @intCast(Layout.screen_height),
+            Theme.color,
+        );
 
         const horizontal_border_y = cell_height_px * line_index_i32 - border_offset_px;
-        rl.drawRectangle(0, horizontal_border_y, @intCast(screen_width), grid_border_thickness_px, color);
+        rl.drawRectangle(
+            0,
+            horizontal_border_y,
+            @intCast(Layout.screen_width),
+            Theme.thickness_px,
+            Theme.color,
+        );
     }
 }
 
 fn update_game() void {
-    switch (active_screen) {
+    switch (game.active_screen) {
         .welcome => {
             if (rl.isKeyPressed(.enter) or rl.isMouseButtonPressed(.left)) {
-                init_game();
-                active_screen = .game;
+                game.active_screen = .game;
             }
         },
         .game => {
             if (game.status == .started and rl.isMouseButtonPressed(.left)) {
                 const mouse_position = rl.getMousePosition();
 
-                const x: u8 = @intFromFloat(@divExact(mouse_position.y, cell_size));
-                const y: u8 = @intFromFloat(@divExact(mouse_position.x, cell_size));
+                const x: u8 = @intFromFloat(@divExact(mouse_position.y, Layout.cell_size));
+                const y: u8 = @intFromFloat(@divExact(mouse_position.x, Layout.cell_size));
 
                 take_position(x, y) catch |err| switch (err) {
                     error.PositionOccupied => {},
@@ -296,7 +317,7 @@ fn update_game() void {
         .ending => {
             if (rl.isKeyPressed(.r) or rl.isMouseButtonPressed(.left)) {
                 init_game();
-                active_screen = .game;
+                game.active_screen = .game;
             }
         },
     }
@@ -308,7 +329,7 @@ fn draw_game() void {
 
     rl.clearBackground(.black);
 
-    switch (active_screen) {
+    switch (game.active_screen) {
         .welcome => {
             draw_centered_text("Welcome! Press enter to start");
         },
@@ -337,6 +358,7 @@ pub fn main() !void {
     try init_window();
     defer deinit_window();
 
+    init_game();
     while (!rl.windowShouldClose()) {
         update_draw_frame();
     }
