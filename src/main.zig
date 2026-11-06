@@ -18,11 +18,14 @@ pub const board_size: u8 = 3;
 pub const Turn = enum { x, o };
 pub const Board = [board_size][board_size]?Turn;
 
-const Status = enum { started, x_won, o_won, tie };
-
 const log = std.log;
 
+const Status = enum { started, x_won, o_won, tie };
 const Screen = enum { welcome, game, ending };
+const Theme = struct {
+    const thickness_px: i32 = 10;
+};
+
 var active_screen: Screen = .welcome;
 
 var font: rl.Font = undefined;
@@ -37,10 +40,17 @@ comptime {
     assert(screen_height % 3 == 0);
 }
 
+const WinnerLine = struct {
+    start: rl.Vector2,
+    end: rl.Vector2,
+    current: rl.Vector2,
+};
+
 const Game = struct {
     board: Board,
     turn: Turn,
     status: Status,
+    winner_line: ?WinnerLine = null,
 };
 
 var game: Game = undefined;
@@ -63,13 +73,48 @@ fn find_line_winner(first: ?Turn, second: ?Turn, third: ?Turn) ?Turn {
     return null;
 }
 
+fn cell_center(x: usize, y: usize) rl.Vector2 {
+    const half_cell_size = cell_size / 2;
+
+    // Swapped values
+    return rl.Vector2{
+        .x = @floatFromInt((y * cell_size) + half_cell_size),
+        .y = @floatFromInt((x * cell_size) + half_cell_size),
+    };
+}
+
+fn set_winner_line(
+    first_cell_x: usize,
+    first_cell_y: usize,
+    last_cell_x: usize,
+    last_cell_y: usize,
+) void {
+    log.debug("winner line ({}, {}) to ({}, {})", .{ first_cell_x, first_cell_y, last_cell_x, last_cell_y });
+
+    const start = cell_center(first_cell_x, first_cell_y);
+
+    game.winner_line = .{ .start = start, .current = start, .end = cell_center(last_cell_x, last_cell_y) };
+}
+
 fn find_winner() ?Turn {
     for (0..board_size) |index| {
-        if (find_line_winner(game.board[index][0], game.board[index][1], game.board[index][2])) |turn| return turn;
-        if (find_line_winner(game.board[0][index], game.board[1][index], game.board[2][index])) |turn| return turn;
+        if (find_line_winner(game.board[index][0], game.board[index][1], game.board[index][2])) |turn| {
+            set_winner_line(index, 0, index, 2);
+            return turn;
+        }
+        if (find_line_winner(game.board[0][index], game.board[1][index], game.board[2][index])) |turn| {
+            set_winner_line(0, index, 2, index);
+            return turn;
+        }
     }
-    if (find_line_winner(game.board[0][0], game.board[1][1], game.board[2][2])) |turn| return turn;
-    if (find_line_winner(game.board[0][2], game.board[1][1], game.board[2][0])) |turn| return turn;
+    if (find_line_winner(game.board[0][0], game.board[1][1], game.board[2][2])) |turn| {
+        set_winner_line(0, 0, 2, 2);
+        return turn;
+    }
+    if (find_line_winner(game.board[0][2], game.board[1][1], game.board[2][0])) |turn| {
+        set_winner_line(0, 2, 2, 0);
+        return turn;
+    }
 
     return null;
 }
@@ -89,7 +134,6 @@ fn update_status() void {
             .x => .x_won,
             .o => .o_won,
         };
-        active_screen = .ending;
     }
 
     if (is_board_full()) {
@@ -135,6 +179,25 @@ fn text_from_mark(mark: Turn) [:0]const u8 {
         .x => "x",
         .o => "o",
     };
+}
+
+fn draw_winner_line() void {
+    const line = if (game.winner_line) |*l| l else return;
+    const speed = 8;
+
+    line.current.x += std.math.clamp(line.end.x - line.current.x, -speed, speed);
+    line.current.y += std.math.clamp(line.end.y - line.current.y, -speed, speed);
+
+    rl.drawLineEx(
+        line.start,
+        line.current,
+        Theme.thickness_px,
+        color,
+    );
+
+    if (line.current.x == line.end.x and line.current.y == line.end.y) {
+        active_screen = .ending;
+    }
 }
 
 fn draw_centered_text(text: [:0]const u8) void {
@@ -219,7 +282,7 @@ fn update_game() void {
             }
         },
         .game => {
-            if (rl.isMouseButtonPressed(.left)) {
+            if (game.status == .started and rl.isMouseButtonPressed(.left)) {
                 const mouse_position = rl.getMousePosition();
 
                 const x: u8 = @intFromFloat(@divExact(mouse_position.y, cell_size));
@@ -252,6 +315,7 @@ fn draw_game() void {
         .game => {
             draw_grid();
             draw_board();
+            draw_winner_line();
         },
         .ending => {
             switch (game.status) {
@@ -262,8 +326,6 @@ fn draw_game() void {
             }
         },
     }
-
-    rl.enableEventWaiting();
 }
 
 fn update_draw_frame() void {
