@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
     // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
+    // between debug, safe, fast, and small. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
     // It's also possible to define more custom flags to toggle optional features
@@ -45,10 +45,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
-    const raylib = raylib_dep.module("raylib");
-    const raygui = raylib_dep.module("raygui");
-    const raylib_artifact = raylib_dep.artifact("raylib");
+    const raylib = raylib_dep.module("raylib"); // main raylib module
+    const raygui = raylib_dep.module("raygui"); // raygui module
+    const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -66,35 +65,33 @@ pub fn build(b: *std.Build) void {
     //
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
-    const exe = b.addExecutable(.{
-        .name = "zig_zag_zoe",
-        .root_module = b.createModule(.{
-            // b.createModule defines a new module just like b.addModule but,
-            // unlike b.addModule, it does not expose the module to consumers of
-            // this package, which is why in this case we don't have to give it a name.
-            .root_source_file = b.path("src/main.zig"),
-            // Target and optimization levels must be explicitly wired in when
-            // defining an executable or library (in the root module), and you
-            // can also hardcode a specific target for an executable or library
-            // definition if desireable (e.g. firmware for embedded devices).
-            .target = target,
-            .optimize = optimize,
-            // List of modules available for import in source files part of the
-            // root module.
-            .imports = &.{
-                // Here "zig_zag_zoe" is the name you will use in your source code to
-                // import this module (e.g. `@import("zig_zag_zoe")`). The name is
-                // repeated because you are allowed to rename your imports, which
-                // can be extremely useful in case of collisions (which can happen
-                // importing modules from different packages).
-                .{ .name = "zig_zag_zoe", .module = mod },
-            },
-        }),
+    const exe_mod = b.createModule(.{
+        // b.createModule defines a new module just like b.addModule but,
+        // unlike b.addModule, it does not expose the module to consumers of
+        // this package, which is why in this case we don't have to give it a name.
+        .root_source_file = b.path("src/main.zig"),
+        // Target and optimization levels must be explicitly wired in when
+        // defining an executable or library (in the root module), and you
+        // can also hardcode a specific target for an executable or library
+        // definition if desireable (e.g. firmware for embedded devices).
+        .target = target,
+        .optimize = optimize,
+        // List of modules available for import in source files part of the
+        // root module.
+        .imports = &.{
+            // Here "zig_zag_zoe" is the name you will use in your source code to
+            // import this module (e.g. `@import("zig_zag_zoe")`). The name is
+            // repeated because you are allowed to rename your imports, which
+            // can be extremely useful in case of collisions (which can happen
+            // importing modules from different packages).
+            .{ .name = "zig_zag_zoe", .module = mod },
+        },
     });
 
-    exe.root_module.linkLibrary(raylib_artifact);
-    exe.root_module.addImport("raylib", raylib);
-    exe.root_module.addImport("raygui", raygui);
+    const exe = b.addExecutable(.{ .name = "zig_zag_zoe", .root_module = exe_mod });
+    exe_mod.linkLibrary(raylib_artifact);
+    exe_mod.addImport("raylib", raylib);
+    exe_mod.addImport("raygui", raygui);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -124,9 +121,7 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build
     // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to

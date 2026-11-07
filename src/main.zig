@@ -56,7 +56,7 @@ var game: Game = undefined;
 
 fn init_game() void {
     game = Game{
-        .board = .{.{null} ** 3} ** 3,
+        .board = @splat(@splat(null)),
         .turn = .x,
         .status = .started,
     };
