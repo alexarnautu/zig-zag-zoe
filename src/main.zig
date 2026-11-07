@@ -296,6 +296,8 @@ fn draw_grid() void {
 }
 
 fn draw_placement() void {
+    if (game.status != .started) return;
+
     const text = text_from_mark(game.turn);
     const mouse_position = rl.getMousePosition();
 
