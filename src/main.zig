@@ -207,7 +207,7 @@ fn draw_winner_line() void {
     }
 }
 
-fn draw_centered_text(text: [:0]const u8) void {
+fn draw_centered_text(text: [:0]const u8, offset_y: ?f32) void {
     const text_size = rl.measureTextEx(
         text_font,
         text,
@@ -217,7 +217,7 @@ fn draw_centered_text(text: [:0]const u8) void {
 
     const text_position = rl.Vector2{
         .x = (Layout.screen_width - text_size.x) / 2,
-        .y = (Layout.screen_height - text_size.y) / 2,
+        .y = (Layout.screen_height - text_size.y) / 2 + (offset_y orelse 0),
     };
 
     rl.drawTextEx(
@@ -333,7 +333,7 @@ fn update_game() void {
             }
         },
         .ending => {
-            if (rl.isKeyPressed(.r) or rl.isMouseButtonPressed(.left)) {
+            if (rl.getKeyPressed() != .null) {
                 init_game();
                 game.active_screen = .game;
             }
@@ -349,7 +349,7 @@ fn draw_game() void {
 
     switch (game.active_screen) {
         .welcome => {
-            draw_centered_text("Press any key to start");
+            draw_centered_text("Press any key to start", null);
         },
         .game => {
             draw_grid();
@@ -359,11 +359,12 @@ fn draw_game() void {
         },
         .ending => {
             switch (game.status) {
-                .o_won => draw_centered_text("O won!"),
-                .x_won => draw_centered_text("X won!"),
-                .tie => draw_centered_text("It's a tie!"),
+                .o_won => draw_centered_text("O won!", null),
+                .x_won => draw_centered_text("X won!", null),
+                .tie => draw_centered_text("It's a tie!", null),
                 .started => {},
             }
+            draw_centered_text("Press any key to restart", 50);
         },
     }
 }
