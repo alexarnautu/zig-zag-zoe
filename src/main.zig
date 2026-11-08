@@ -25,7 +25,8 @@ const Screen = enum { welcome, game, ending };
 const Theme = struct {
     const color = rl.Color.light_gray;
     const thickness_px: i32 = 10;
-    const font_size_px: i32 = 50;
+    const text_font_size_px: i32 = 50;
+    const symbol_font_size_px: i32 = Layout.cell_size_px / 2;
     const font_spacing_px: i32 = 0;
 };
 
@@ -33,7 +34,8 @@ comptime {
     assert(Theme.thickness_px % 2 == 0);
 }
 
-var font: rl.Font = undefined;
+var symbol_font: rl.Font = undefined;
+var text_font: rl.Font = undefined;
 
 pub const Turn = enum { x, o };
 pub const Board = [Layout.grid_size][Layout.grid_size]?Turn;
@@ -168,14 +170,16 @@ fn init_window() error{LoadFont}!void {
         "Zig Zag Zoe",
     );
 
-    font = try rl.getFontDefault();
+    symbol_font = try rl.loadFontEx("resources/fonts/GochiHand-Regular.ttf", Theme.symbol_font_size_px, null);
+    text_font = try rl.loadFontEx("resources/fonts/BebasNeue-Regular.ttf", Theme.text_font_size_px, null);
 
     rl.setTargetFPS(60);
 }
 
 fn deinit_window() void {
     rl.closeWindow();
-    rl.unloadFont(font);
+    rl.unloadFont(symbol_font);
+    rl.unloadFont(text_font);
 }
 fn text_from_mark(mark: Turn) [:0]const u8 {
     return switch (mark) {
@@ -205,9 +209,9 @@ fn draw_winner_line() void {
 
 fn draw_centered_text(text: [:0]const u8) void {
     const text_size = rl.measureTextEx(
-        font,
+        text_font,
         text,
-        Theme.font_size_px,
+        Theme.text_font_size_px,
         Theme.font_spacing_px,
     );
 
@@ -217,10 +221,10 @@ fn draw_centered_text(text: [:0]const u8) void {
     };
 
     rl.drawTextEx(
-        font,
+        text_font,
         text,
         text_position,
-        Theme.font_size_px,
+        Theme.text_font_size_px,
         Theme.font_spacing_px,
         Theme.color,
     );
@@ -230,7 +234,7 @@ fn draw_board_turn(text: [:0]const u8, row_index: f32, column_index: f32) void {
     const text_font_size = Layout.cell_size_px / 2;
 
     const text_size = rl.measureTextEx(
-        font,
+        symbol_font,
         text,
         text_font_size,
         0,
@@ -245,10 +249,10 @@ fn draw_board_turn(text: [:0]const u8, row_index: f32, column_index: f32) void {
     };
 
     rl.drawTextEx(
-        font,
+        symbol_font,
         text,
         text_position,
-        Layout.cell_size_px / 2,
+        Theme.symbol_font_size_px,
         Theme.font_spacing_px,
         Theme.color,
     );
@@ -312,7 +316,7 @@ fn draw_placement() void {
 fn update_game() void {
     switch (game.active_screen) {
         .welcome => {
-            if (rl.isKeyPressed(.enter) or rl.isMouseButtonPressed(.left)) {
+            if (rl.getKeyPressed() != .null) {
                 game.active_screen = .game;
             }
         },
@@ -345,7 +349,7 @@ fn draw_game() void {
 
     switch (game.active_screen) {
         .welcome => {
-            draw_centered_text("Welcome! Press enter to start");
+            draw_centered_text("Press any key to start");
         },
         .game => {
             draw_grid();
