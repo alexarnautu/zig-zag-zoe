@@ -33,16 +33,13 @@ pub fn build(b: *std.Build) !void {
         const install_dir: std.Build.InstallDir = .{ .custom = "web" };
         const html_filename = b.fmt("{s}.html", .{wasm.name});
         const emcc_flags = emsdk.emccDefaultFlags(b.allocator, .{ .optimize = optimize });
-        var emcc_settings = emsdk.emccDefaultSettings(b.allocator, .{ .optimize = optimize });
-
-        // Embed the HTML, CSS & WASM in a single file
-        try emcc_settings.put("SINGLE_FILE", "1");
+        const emcc_settings = emsdk.emccDefaultSettings(b.allocator, .{ .optimize = optimize });
 
         const emcc_step = try emsdk.emccStep(b, &.{}, &.{ raylib_artifact, wasm }, .{
             .optimize = optimize,
             .flags = emcc_flags,
             .settings = emcc_settings,
-            .shell_file_path = raylib_dep.builder.dependency("raylib", .{}).path("src/shell.html"),
+            .shell_file_path = b.path("src/shell.html"),
             .install_dir = install_dir,
             .out_file_name = html_filename,
         });
