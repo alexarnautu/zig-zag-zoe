@@ -23,7 +23,7 @@ comptime {
 const Status = enum { started, x_won, o_won, tie };
 const Screen = enum { welcome, game, ending };
 const Theme = struct {
-    const color = rl.Color.light_gray;
+    const color = rl.Color.dark_gray;
     const thickness_px: i32 = 10;
     const text_font_size_px: i32 = 50;
     const symbol_font_size_px: i32 = Layout.cell_size_px / 2;
@@ -36,6 +36,7 @@ comptime {
 
 var symbol_font: rl.Font = undefined;
 var text_font: rl.Font = undefined;
+var background: rl.Texture2D = undefined;
 
 pub const Turn = enum { x, o };
 pub const Board = [Layout.grid_size][Layout.grid_size]?Turn;
@@ -163,7 +164,7 @@ pub fn take_position(x: u8, y: u8) error{PositionOccupied}!void {
     assert(game.turn != turn);
 }
 
-fn init_window() error{LoadFont}!void {
+fn init_window() error{LoadFont,LoadTexture}!void {
     rl.initWindow(
         Layout.screen_width,
         Layout.screen_height,
@@ -172,6 +173,7 @@ fn init_window() error{LoadFont}!void {
 
     symbol_font = try rl.loadFontEx("resources/fonts/GochiHand-Regular.ttf", Theme.symbol_font_size_px, null);
     text_font = try rl.loadFontEx("resources/fonts/BebasNeue-Regular.ttf", Theme.text_font_size_px, null);
+    background = try rl.loadTexture("resources/textures/background.png");
 
     rl.setTargetFPS(60);
 }
@@ -180,6 +182,7 @@ fn deinit_window() void {
     rl.closeWindow();
     rl.unloadFont(symbol_font);
     rl.unloadFont(text_font);
+    rl.unloadTexture(background);
 }
 fn text_from_mark(mark: Turn) [:0]const u8 {
     return switch (mark) {
@@ -345,7 +348,8 @@ fn draw_game() void {
     rl.beginDrawing();
     defer rl.endDrawing();
 
-    rl.clearBackground(.black);
+    rl.clearBackground(.white);
+    rl.drawTexture(background, 0, 0, .white);
 
     switch (game.active_screen) {
         .welcome => {

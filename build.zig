@@ -42,7 +42,7 @@ pub fn build(b: *std.Build) !void {
             .shell_file_path = b.path("src/shell.html"),
             .install_dir = install_dir,
             .out_file_name = html_filename,
-            .embed_paths = &.{.{ .src_path = b.path("resources/") }},
+            .preload_paths = &.{.{ .src_path = b.path("resources"), .virtual_path = "resources" }},
         });
 
         b.getInstallStep().dependOn(emcc_step);
